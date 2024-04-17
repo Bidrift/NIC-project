@@ -5,7 +5,7 @@ from math import floor
 import seaborn as sns
 from scipy.stats import spearmanr
 from statsmodels.stats.outliers_influence import variance_inflation_factor
-import sko
+from sko.PSO import PSO
 from sklearn.decomposition import PCA
 from sklearn.datasets import make_classification
 from sklearn.model_selection import train_test_split
@@ -19,8 +19,25 @@ def display_heat_map(data: pd.DataFrame, title: str):
     plt.title(title)
     plt.show()
     
-class PSO:
-    def __init__(self, df: pd.DataFrame, max_iter = 200, vif_threshold = 2.5, epsilon = 0.1,
+class MultiPSO:
+    def set_data(self, df):
+        self.df = df
+        # calculate the spearmanr correlation of the dataframe's features
+        corr = spearmanr(df).correlation
+        # make sure it is symmetric
+        corr = (corr + corr.T) / 2
+        # fill the diagonal with 1s
+        np.fill_diagonal(corr, 1)
+        # transform the matrix to a dataframe that represents how similar each feature it is to another
+        self.dist_matrix = pd.DataFrame(data= (1 - np.abs (corr)), columns=list(df.columns), index=list(df.columns))
+        # have a dictionary mapping the column's order to its name
+        self.columns_dict = dict(list(zip(range(len(df.columns)), df.columns)))
+        # set the number of features for later reference
+        self.num_feats = len(df.columns)
+        # save the column names for later reference
+        self.columns = list(df.columns) 
+    
+    def __init__(self, df: pd.DataFrame, max_iter = 200, vif = 2.5, epsilon = 0.1,
                  min_fraction=0.40, max_fraction=0.76, step=0.05) -> None:
         self.max_iter = max_iter
         self.df = df
@@ -28,7 +45,7 @@ class PSO:
         np.fill_diagonal((corr + corr.T) / 2, 1)
         self.num_features = len(df.columns)
         self.pso = None
-        self.vif = vif_threshold
+        self.vif = vif
         self.epsilon = epsilon
         self.min_fraction = min_fraction
         self.max_fraction = max_fraction
@@ -39,8 +56,7 @@ class PSO:
             df = self.df
         vif = pd.DataFrame()
         vif['variables'] = self.df.columns
-        for i in range(self.num_features):
-            vif['VIF'] = [variance_inflation_factor(self.df.values, i)]
+        vif['VIF'] = [variance_inflation_factor(df.values, i) for i in range(len(df.columns))]
         return vif.set_index('variables')
     
     def _get_clusters(self, particle: np.array):
@@ -63,13 +79,13 @@ class PSO:
         return inner_cluster_score
     
     def _pso_function(self, particle: np.array):
-        return self._cluster_scores(self._get_clusters(particle))
+        return self._calculate_score(self._get_clusters(particle))
     
     def _cluster_pso(self, num_clusters):
         pso_function = lambda x: self._pso_function(x)
         lower_bound = np.zeros(self.num_feats)
         upper_bound = np.full(shape=self.num_feats, fill_value=num_clusters, dtype="float")
-        pso = sko.PSO.PSO(func=pso_function, n_dim=self.num_feats, pop=15, max_iter=self.max_iter, lb=lower_bound,
+        pso = PSO(func=pso_function, dim=self.num_feats, pop=15, max_iter=self.max_iter, lb=lower_bound,
                           ub=upper_bound, c1=1.5, c2=1.5)
         pso.run()
         x, y = pso.gbest_x, pso.gbest_y
@@ -102,7 +118,7 @@ class PSO:
 
     def eliminate_multicollinearity(self, df: pd.DataFrame):
         vif = self._calculate_vif(df)
-        collinear = list(vif[vif['VIF'] >= self.vif_threshold].index)
+        collinear = list(vif[vif['VIF'] >= self.vif].index)
         collinear_df = df.loc[:, collinear]
         non_collinear = [c for c in df.columns if c not in collinear]
         non_collinear_df = df.loc[:, non_collinear]
@@ -129,7 +145,7 @@ with open ("test.txt", "a") as f:
 
         X1 = pd.DataFrame(data=X1, columns=range(X1.shape[1]))
 
-        pso = PSO(X1.copy())
+        pso = MultiPSO(X1.copy())
 
         new_X1 = pso.eliminate_multicollinearity(X1.copy())
         
