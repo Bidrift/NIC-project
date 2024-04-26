@@ -13,9 +13,10 @@ from sklearn.metrics import accuracy_score
 from sklearn.linear_model import LogisticRegression
 import random
 
-def display_heat_map(data: pd.DataFrame, title: str):
-    plt.figure(figsize=(10, 10))
-    sns.heatmap(data, linewidth=1, annot=True)
+def draw_heatmap(data: pd.DataFrame, title: str):
+    correlation_matrix = data.corr()
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt=".2f")
     plt.title(title)
     plt.show()
     
@@ -89,7 +90,6 @@ class MultiPSO:
                           ub=upper_bound, c1=1.5, c2=1.5)
         pso.run()
         x, y = pso.gbest_x, pso.gbest_y
-        cluster_feats = self._get_clusters(x)
         return x, y
     
     def _find_best_cluster(self):
@@ -108,12 +108,21 @@ class MultiPSO:
         return best_x
     
     def _get_new_df(self, best_particle):
+        # Define a PCA object to combine the clustered 
         pca = PCA(n_components=1)
+
+        # Get the clusters out of the particle
         clusters = self._get_clusters(best_particle)
         new_dfs = []
+
         for _, feats in clusters.items():
-            new_feats = pd.DataFrame(data=pca.fit_transform(self.df.loc[:, feats]), index=list(self.df.index))
+            # Convert indices to column names
+            feat_names = [self.columns[i] for i in feats]
+            # Reduce the clustered features into a single more informative feature
+            new_feats = pd.DataFrame(data=pca.fit_transform(self.df.loc[:, feat_names]), index=list(self.df.index))
             new_dfs.append(new_feats)
+
+        # Return the features concatenated horizontally 
         return pd.concat(new_dfs, axis=1, ignore_index=True)
 
     def eliminate_multicollinearity(self, df: pd.DataFrame):
@@ -128,59 +137,3 @@ class MultiPSO:
         best_x = self._find_best_cluster()
         new_collinear_df = self._get_new_df(best_x)
         return pd.concat([non_collinear_df, new_collinear_df], axis=1)
-    
-
-with open ("test.txt", "a") as f:
-    solution_counter = 0
-    improved_solution_counter = 0
-    degraded_solution_counter = 0
-    for i in range(20):
-        features_1 = 0
-        features_2 = 0
-        features_removed = 0
-        random_state = random.randint(0, 200)
-        n_informative = random.randint(5, 14)
-        n_redundant = random.randint(6, 12)
-        X1, y = make_classification(n_samples=4000, n_features=25,n_informative=n_informative, n_redundant=n_redundant, n_repeated=0, shuffle=False, random_state=random_state)
-
-        X1 = pd.DataFrame(data=X1, columns=range(X1.shape[1]))
-
-        pso = MultiPSO(X1.copy())
-
-        new_X1 = pso.eliminate_multicollinearity(X1.copy())
-        
-        X_train1, X_test1, y_train1, y_test1 = train_test_split(X1, y, test_size=0.2, random_state=11)
-        features_1 = len(X_train1.columns)
-        lr = LogisticRegression(max_iter=5000)
-        lr.fit(X_train1, y_train1)
-        y_pred1 = lr.predict(X_test1)
-        a1 = accuracy_score(y_test1, y_pred1)
-        
-        X_train1, X_test1, y_train1, y_test1 = train_test_split(new_X1,y,  test_size=0.2, random_state=11)
-        features_2 = len(X_train1.columns)
-        features_removed += features_1 - features_2
-        lr.fit(X_train1, y_train1)
-        y_pred1 = lr.predict(X_test1)
-        a2 = (accuracy_score(y_test1, y_pred1))
-        print(f"a1:\t{a1}")
-        print(f"a2:\t{a2}")
-        
-        f.write(f"test {i}\n")
-        f.write(f"random state: {random_state}, inf feat: {n_informative}, red feat: {n_redundant}\n")
-        f.write(f"accuracy with {features_1} features :{a1}\n")
-        f.write(f"accuracy with {features_1-features_2} features removed:{a2}\n")
-        f.write("\n")
-        solution_counter += 1
-        
-        solution_difference = a2-a1
-    
-        if (a2 > a1):
-            improved_solution_counter += 1
-        elif (solution_difference < 0.001):
-            degraded_solution_counter += 1
-    features_removed = features_removed/solution_counter
-    f.write(f"Among {solution_counter} tests we had {improved_solution_counter} improved solutions and {degraded_solution_counter} worse solutions")
-    f.write(f"Apprx. {solution_difference} features was removed per test")
-        
-        
-        
