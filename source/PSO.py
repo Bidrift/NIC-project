@@ -12,13 +12,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 from sklearn.linear_model import LogisticRegression
 import random
-
-def draw_heatmap(data: pd.DataFrame, title: str):
-    correlation_matrix = data.corr()
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt=".2f")
-    plt.title(title)
-    plt.show()
     
 class MultiPSO:
     def set_data(self, df):
