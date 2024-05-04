@@ -14,3 +14,5 @@ GP.py: genetic programming for feature transformation
 PSO.py: Multicollinearity with sko.PSO implementation
 init_data: dynamic data retriever
 preprocessing: static data retriever
+
+https://docs.google.com/presentation/d/1UuW93cOD_7D1kJq9nee4SLwnvZWo4bjw70kj_Euthf4/edit?usp=sharing
